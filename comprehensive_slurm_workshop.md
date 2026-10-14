@@ -11,10 +11,10 @@
   ```
   Account: short_term
   Partition: interactive
-  Number of hour: 4
+  Number of hour: 5
   Number of Tasks per node: 10
   Memory Required: 8G
-  Working Directory: /work/short_term/slurm_workshop
+  Working Directory: `/work/short_term`
   ```
 
 - Create a directory for each user
@@ -27,10 +27,9 @@ cd $USER
 - Copy the data to your directory
 
 ```bash
-cp -r /work/short_term/satheesh/01_data .
+cp -r /work/short_term/$USER/01_data .
 git clone https://github.com/ISUgenomics/slurm-workshop-2026.git
 ```
-
 
 ## Part 1: Running commands and making a script of the commands run
 
