@@ -27,7 +27,7 @@ cd $USER
 - Copy the data to your directory
 
 ```bash
-cp -r /work/short_term/$USER/01_data .
+cp -r /work/short_term/satheesh/01_data .
 git clone https://github.com/ISUgenomics/slurm-workshop-2026.git
 ```
 
@@ -79,7 +79,7 @@ bio_sample_01_R2.fastq.gz  bio_sample_02_R2.fastq.gz  bio_sample_03_R2.fastq.gz 
 </pre>
 </details>
 
-### Checking the quality of the reads using FastQC
+### Running a program on data files
 
 #### One file
 
