@@ -43,7 +43,7 @@ git clone https://github.com/ISUgenomics/slurm-workshop-2026.git
 - It is the node that will be used to submit your jobs to the cluster.
 - Remember, we DO NOT run intensive jobs on this node. 
 
-**Head node etiquette**: editing files, `ls`, `git`, submitting jobs, and quick tests are fine. Anything that runs more than a minute or uses significant CPU/memory belongs on a compute node — via `srun --pty bash` for interactive work or `sbatch` for batch. Admins do kill processes that hog the login node, and it slows down everyone else.
+**Head node etiquette**: editing files, `ls`, `git`, submitting jobs, and quick tests are fine. Anything that runs more than a minute or uses significant CPU/memory belongs on a compute node — via `srun --pty bash` for interactive work or `sbatch` for batch. Heavy processes on the login node may be stopped by admins, and they slow things down for everyone sharing it.
 
 ### What is a compute node?
 
@@ -344,7 +344,7 @@ logs/02_fastqc_loop_bio_sample_05_R2.log:Analysis complete for bio_sample_05_R2.
 #### Why Use GNU Parallel?
 A natural first instinct is to write a loop that submits a job using `sbatch` or `&` for every file.
 - **Why not `sbatch` in a loop?** Submitting 1,000 tiny jobs overwhelms the scheduler and makes tracking failures difficult.
-- **Why not background processes (`&`)?** There is no load balancing. You will crash the node (OOM) because all processes start at once.
+- **Why not background processes (`&`)?** There is no load balancing — all processes start at once and can easily exhaust the node's memory (OOM).
 
 GNU Parallel is designed perfectly for this. It manages the queue of tasks *inside* your single job.
 
@@ -676,11 +676,11 @@ Memory Efficiency: 40.83% of 8.00 GB (8.00 GB/node)
 
 ---
 
-### The Efficiency Mindset: What happens if you guess wrong?
+### The Efficiency Mindset: What happens if your estimates are off?
 
 When writing a SLURM script, you request Time, Memory, and CPUs.
-1. **Guess too low**: Job killed by Slurm (OOM - Out Of Memory, or Time Limit).
-2. **Guess too high**: 
+1. **Request too little**: SLURM stops the job (OOM - Out Of Memory, or Time Limit).
+2. **Request too much**: 
    - You wait longer in the queue.
    - You waste resources that others could use.
    - Your "Fair Share" score drops, making future jobs wait longer.
@@ -688,7 +688,7 @@ When writing a SLURM script, you request Time, Memory, and CPUs.
 **Rule of Thumb**: Always run a single task first, measure it with `seff`, and then request **20-30% more** than the maximum you observed to be safe.
 
 **Why this matters for Arrays**: 
-If you run 1 job, wasting 4GB RAM is fine. If you run an array of **1,000 jobs**, wasting 4GB each = **4 Terabytes** of wasted RAM reservation. Slurm will never schedule all that, and you will wait forever.
+If you run 1 job, reserving 4GB more than needed is a small cost. In an array of **1,000 jobs**, reserving 4GB extra each adds up to **4 Terabytes** of unused reservation — the tasks may take much longer to schedule.
 
 ---
 
@@ -701,7 +701,7 @@ In reality, jobs will fail frequently due to typos or missing paths. Let's look 
 ```bash
 cat logs/fastqc_8249780.err
 ```
-If you see `command not found`, you forgot to `module load`. If you see `No such file or directory`, your path to `01_data` is wrong.
+If you see `command not found`, a module likely wasn't loaded. If you see `No such file or directory`, check the path to `01_data`.
 
 2. **Check the state and exit code**:
 
@@ -782,7 +782,7 @@ Clusters use a **fair-share** scheduler: the more CPU-hours you've used recently
 sshare -u $USER
 ```
 
-This is another reason right-sizing matters — hoarding resources you don't use still counts against you (your allocation is reserved whether you use it or not), and over-requesting makes *your own* next job wait longer.
+This is another reason right-sizing matters — resources you reserve count against your usage whether you use them or not, and over-requesting makes your next job wait longer.
 
 ---
 
@@ -790,13 +790,13 @@ This is another reason right-sizing matters — hoarding resources you don't use
 
 Inside a running job, SLURM sets variables your script can read instead of hardcoding values:
 
-| Variable | What it holds |
-| :--- | :--- |
-| `$SLURM_JOB_ID` | This job's ID |
-| `$SLURM_CPUS_PER_TASK` | Value of `--cpus-per-task` |
-| `$SLURM_ARRAY_TASK_ID` | Index of this array task |
-| `$SLURM_ARRAY_TASK_COUNT` | Total number of array tasks |
-| `$SLURM_SUBMIT_DIR` | Directory you ran `sbatch` from |
+| Variable                    | What it holds                    |
+| :-------------------------- | :------------------------------- |
+| `$SLURM_JOB_ID`             | This job's ID                    |
+| `$SLURM_CPUS_PER_TASK`      | Value of `--cpus-per-task`       |
+| `$SLURM_ARRAY_TASK_ID`      | Index of this array task         |
+| `$SLURM_ARRAY_TASK_COUNT`   | Total number of array tasks      |
+| `$SLURM_SUBMIT_DIR`         | Directory you ran `sbatch` from  |
 
 Use them to keep the script and `#SBATCH` directives in sync — e.g., match GNU Parallel's concurrency to the CPUs you requested:
 
@@ -931,7 +931,7 @@ sbatch --array=0-$((N-1)) 00_scripts/07_fastqc_array.slurm
 
 ### Throttling an array with `%`
 
-When you have hundreds of tasks, you usually don't want them all running at once — they'd fight for disk I/O and blow through your fair share. `%N` caps how many tasks run concurrently:
+When you have hundreds of tasks, you usually don't want them all running at once — they would compete for disk I/O and use up your fair share quickly. `%N` caps how many tasks run concurrently:
 
 ```bash
 # Run tasks 0-9, but at most 3 at a time
@@ -942,7 +942,7 @@ Only 3 tasks run; the rest stay `PENDING` until a slot frees. Try it: submit `--
 
 ### A more robust input list: the manifest file
 
-`FILES=(01_data/*.fastq.gz)` works here, but it has a subtle trap: the array index→file mapping depends on glob order. If files are added/removed between the first run and a retry of failed indices, the indices point at different files. For real projects, write a **manifest** — an explicit list — so index N always means the same file:
+`FILES=(01_data/*.fastq.gz)` works here, but it has a subtlety worth knowing: the array index→file mapping depends on glob order. If files are added/removed between the first run and a retry of failed indices, the indices point at different files. For real projects, write a **manifest** — an explicit list — so index N always means the same file:
 
 ```bash
 # Create the manifest once, at submit time
