@@ -342,8 +342,8 @@ logs/02_fastqc_loop_bio_sample_05_R2.log:Analysis complete for bio_sample_05_R2.
 
 
 #### Why Use GNU Parallel?
-A common beginner mistake is to write a loop that submits a job using `sbatch` or `&` for every file.
-- **Why not `sbatch` in a loop?** Submitting 1,000 tiny jobs spams the scheduler. It's a management nightmare.
+A natural first instinct is to write a loop that submits a job using `sbatch` or `&` for every file.
+- **Why not `sbatch` in a loop?** Submitting 1,000 tiny jobs overwhelms the scheduler and makes tracking failures difficult.
 - **Why not background processes (`&`)?** There is no load balancing. You will crash the node (OOM) because all processes start at once.
 
 GNU Parallel is designed perfectly for this. It manages the queue of tasks *inside* your single job.
