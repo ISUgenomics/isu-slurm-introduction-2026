@@ -1108,7 +1108,7 @@ Imagine you ran 100 jobs.
 - Task 89: FAILED
 
 You don't want to re-run everything. Check which IDs failed (look at logs or `sacct`).
-Then submit **only the holes**:
+Then submit only the failed jobs:
 
 ```bash
 sbatch --array=46,89 00_scripts/07_fastqc_array.slurm
@@ -1170,15 +1170,15 @@ How do you choose between the different methods? Use this simple rule of thumb b
 
 ### The Decision Matrix
 
-| Task Duration | Number of Tasks | Best Strategy |
-| :---: | :---: | :--- |
-| < 1 minute | Any | **GNU Parallel** |
-| 1-15 minutes | < 50 | **GNU Parallel** in a single job |
-| 1-15 minutes | 50-1000 | **GNU Parallel** split into multiple jobs |
-| 15 min - 4 hours | < 500 | **Slurm Job Array** |
-| 15 min - 4 hours | 500+ | **Slurm Job Array** with `%` throttle |
-| 4+ hours | Any | **Slurm Job Array** (consider checkpointing) |
-| 1000s of short tasks | Any | **Task Grouping** (bundle tasks into array elements) |
+| Task Duration | Number of Tasks | Best Strategy                                      |
+| :-----------: | :-------------: | :------------------------------------------------- |
+| < 1 minute    | Any             | **GNU Parallel**                                   |
+| 1-15 minutes  | < 50            | **GNU Parallel** in a single job                   |
+| 1-15 minutes  | 50-1000         | **GNU Parallel** split into multiple jobs          |
+| 15 min - 4 hours | < 500        | **Slurm Job Array**                                |
+| 15 min - 4 hours | 500+         | **Slurm Job Array** with `%` throttle              |
+| 4+ hours      | Any             | **Slurm Job Array** (consider checkpointing)       |
+| 1000s of short tasks | Any      | **Task Grouping** (bundle tasks into array elements) |
 
 ### Real-World Scenarios
 
@@ -1205,7 +1205,7 @@ How do you choose between the different methods? Use this simple rule of thumb b
 
 ---
 
-### Capstone exercise: run it end-to-end
+### Exercise: run it end-to-end
 
 Put the pieces together:
 
