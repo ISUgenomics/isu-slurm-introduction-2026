@@ -130,17 +130,26 @@ bio_sample_01_R2.fastq.gz  bio_sample_02_R2.fastq.gz  bio_sample_03_R2.fastq.gz 
 #### One file
 
 ```bash
-module purge
+module avail fastqc 
+```
+
+- `module avail fastqc` lists the versions of FastQC installed on the cluster.
+
+```bash
 module load fastqc
+```
+
+- `module load fastqc` makes the FastQC program available in your current session (the default version is loaded if you don't specify one).
+
+```bash
 mkdir -p 02_fastqc
 fastqc 01_data/bio_sample_01_R1.fastq.gz -o 02_fastqc/
 ```
--p flag is used to create the directory if it does not exist.
 
-Once the program is run, it will create a directory called `02_fastqc` and put the output files in it.
+- `fastqc 01_data/bio_sample_01_R1.fastq.gz` runs FastQC on one file. With no `-o` option, the results are written next to the input file.
 
 ```bash
-ls 02_fastqc
+ls 02_fastqc/
 ```
 
 <details>
@@ -156,7 +165,10 @@ Remove the folders created
 rm -r 02_fastqc
 ```
 
-Open `00_scripts/01_fastqc.sh` in the script window. 
+Let's write scripts. 
+
+```bash
+mkdir -p 00_scripts
 
 ```bash
 module purge
