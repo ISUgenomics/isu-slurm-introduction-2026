@@ -181,7 +181,7 @@ touch 00_scripts/01_fastqc.sh
 Now, let's write the script. 
 
 ```bash
-#!/bin/bash
+#!/usr/bin/env bash
 
 module purge
 module load fastqc
@@ -190,7 +190,7 @@ fastqc 01_data/bio_sample_01_R1.fastq.gz -o 02_fastqc/ > logs/01_fastqc.log 2>&1
 ```
 
 - Explanation of the command in the script:
-  - `#!/bin/bash` - This is the shebang line that tells the system to use the Bash shell to execute the script.
+  - `#!/usr/bin/env bash` - This is the shebang line that tells the system to use the Bash shell to execute the script. Using `env` finds `bash` on your `PATH`, which is more portable than hardcoding `/bin/bash`.
   - `module purge` - This unloads any currently loaded modules.
   - `module load fastqc` - This loads the FastQC module.
   - `mkdir -p 02_fastqc logs` - This creates the `02_fastqc/` and `logs/` directories if they don't already exist.
@@ -229,11 +229,21 @@ done
 
 **Run `FastQC` on all files in `01_data/`**
 
+Create the script file:
+
 ```bash
+touch 00_scripts/02_fastqc_loop.sh
+```
+
+Now, let's write the script:
+
+```bash
+#!/usr/bin/env bash
+
 module purge
 module load fastqc
 
-mkdir -p 03_fastqc_loop
+mkdir -p 03_fastqc_loop logs
 
 for file in 01_data/*.fastq.gz
 do
@@ -315,6 +325,8 @@ The log file shows the progress of the FastQC analysis for just the last file.
 Let us now make sure that we have a log file for each file. 
 
 ```bash
+#!/usr/bin/env bash
+
 module purge
 module load fastqc
 
@@ -331,6 +343,8 @@ do
   fastqc $file -o $OUTPUT_DIR/ > $LOG_DIR/03_fastqc_loop_$sample_id.log 2>&1
 done
 ```
+
+A **shell variable** is a named container that holds a value (like a path or a filename) so you can reuse it. You set it with `NAME=value` (no spaces around `=`) and read it back with `$NAME`. For example, `INPUT_DIR=01_data` lets you write `$INPUT_DIR/*.fastq.gz` instead of repeating `01_data` everywhere.
 
 Using shell variables in the loop helps to make the script more readable, maintainable, and reusable.
 
@@ -385,154 +399,18 @@ grep "Analysis complete" logs/*bio_sample*log
 <details>
 <summary>Output</summary>
 <pre>
-logs/02_fastqc_loop_bio_sample_01_R1.log:Analysis complete for bio_sample_01_R1.fastq.gz
-logs/02_fastqc_loop_bio_sample_01_R2.log:Analysis complete for bio_sample_01_R2.fastq.gz
-logs/02_fastqc_loop_bio_sample_02_R1.log:Analysis complete for bio_sample_02_R1.fastq.gz
-logs/02_fastqc_loop_bio_sample_02_R2.log:Analysis complete for bio_sample_02_R2.fastq.gz
-logs/02_fastqc_loop_bio_sample_03_R1.log:Analysis complete for bio_sample_03_R1.fastq.gz
-logs/02_fastqc_loop_bio_sample_03_R2.log:Analysis complete for bio_sample_03_R2.fastq.gz
-logs/02_fastqc_loop_bio_sample_04_R1.log:Analysis complete for bio_sample_04_R1.fastq.gz
-logs/02_fastqc_loop_bio_sample_04_R2.log:Analysis complete for bio_sample_04_R2.fastq.gz
-logs/02_fastqc_loop_bio_sample_05_R1.log:Analysis complete for bio_sample_05_R1.fastq.gz
-logs/02_fastqc_loop_bio_sample_05_R2.log:Analysis complete for bio_sample_05_R2.fastq.gz
+logs/03_fastqc_loop_bio_sample_01_R1.log:Analysis complete for bio_sample_01_R1.fastq.gz
+logs/03_fastqc_loop_bio_sample_01_R2.log:Analysis complete for bio_sample_01_R2.fastq.gz
+logs/03_fastqc_loop_bio_sample_02_R1.log:Analysis complete for bio_sample_02_R1.fastq.gz
+logs/03_fastqc_loop_bio_sample_02_R2.log:Analysis complete for bio_sample_02_R2.fastq.gz
+logs/03_fastqc_loop_bio_sample_03_R1.log:Analysis complete for bio_sample_03_R1.fastq.gz
+logs/03_fastqc_loop_bio_sample_03_R2.log:Analysis complete for bio_sample_03_R2.fastq.gz
+logs/03_fastqc_loop_bio_sample_04_R1.log:Analysis complete for bio_sample_04_R1.fastq.gz
+logs/03_fastqc_loop_bio_sample_04_R2.log:Analysis complete for bio_sample_04_R2.fastq.gz
+logs/03_fastqc_loop_bio_sample_05_R1.log:Analysis complete for bio_sample_05_R1.fastq.gz
+logs/03_fastqc_loop_bio_sample_05_R2.log:Analysis complete for bio_sample_05_R2.fastq.gz
 </pre>
 </details>
-
-
-#### Why Use GNU Parallel?
-A natural first instinct is to write a loop that submits a job using `sbatch` or `&` for every file.
-- **Why not `sbatch` in a loop?** Submitting 1,000 tiny jobs overwhelms the scheduler and makes tracking failures difficult.
-- **Why not background processes (`&`)?** There is no load balancing — all processes start at once and can easily exhaust the node's memory (OOM).
-
-GNU Parallel is designed perfectly for this. It manages the queue of tasks *inside* your single job.
-
-#### Multiple files (GNU Parallel)
-
-Let us now use GNU Parallel to run the FastQC analysis on all files in parallel.
-The first step is go for a dry run to see what commands will be executed.
-
-```bash
-module load parallel 
-mkdir -p 05_fastqc_parallel
-parallel --dry-run -j 10 fastqc {} -o 05_fastqc_parallel/ ::: 01_data/*.fastq.gz
-```
-
-- `parallel --dry-run -j 10 fastqc {} -o 05_fastqc_parallel/ ::: 01_data/*.fastq.gz`
-  - `--dry-run` prints the commands that would be executed, without running them. Use this to verify first.
-  - `-j 10` means run up to 10 jobs at the same time (choose based on cores available to you).
-  - `fastqc {}` is the command template; `{}` will be replaced by each input filename.
-  - `-o 05_fastqc_parallel/` sends FastQC outputs into that directory.
-  - `:::` introduces the list of inputs to feed to GNU Parallel; here the shell expands `01_data/*.fastq.gz` to all matching files.
-
-To actually run the commands (not just show them), remove `--dry-run`:
-
-```bash
-module purge
-module load parallel
-module load fastqc 
-
-mkdir -p 05_fastqc_parallel
-
-parallel -j10 \
-  'fastqc {1} -o 05_fastqc_parallel/ > logs/04_fastqc_parallel_{1/.}.log 2>&1' \
-  ::: 01_data/*.fastq.gz
-```
-
-- The trailing `\` characters are line continuations so the long command is split across multiple lines for readability.
-- Quotes `'...'` keep the whole FastQC template as one string so that GNU Parallel, not your shell, substitutes `{1}` and `{1/.}`.
-- `{1}` is the first input argument (each file matched by the glob). With a single input source, `{}` and `{1}` are equivalent.
-- `{1/.}` is a GNU Parallel filename modifier: it expands to the basename of the first input with the final extension removed (and without the directory). This lets us name per-file logs like `logs/02_fastqc_parallel_bio_sample_01_R1.log`.
-- `> logs/02_fastqc_parallel_{1/.}.log 2>&1` writes both stdout and stderr of each FastQC run to a separate log file derived from the input name.
-
-Add the above script to `00_scripts/04_fastqc_parallel.sh`.
-
-Make it executable:
-
-```bash
-chmod +x 00_scripts/04_fastqc_parallel.sh
-```
-
-**Run the script**
-
-```bash
-time ./00_scripts/04_fastqc_parallel.sh
-```
-
-<details>
-<summary>Output</summary>
-<pre>
-real    0m26.453s
-user    2m1.143s
-sys     0m3.962s
-</pre>
-</details>
-
-- **Why `user` > `real` here**
-  - Because we ran multiple tasks concurrently (e.g., via loops or GNU Parallel), CPU time across cores adds up. If 8 cores each do ~15 seconds of work, `user` could be ~120 seconds while `real` is ~15–30 seconds.
-
-- **How to interpret**
-  - Use `real` to estimate elapsed time for the end-to-end run (what you experience).
-  - Use `user + sys` to gauge how much total CPU work was consumed. Large gaps between `real` and `user+sys` often indicate parallelism; very small `user`/`sys` compared to `real` can indicate waiting on I/O.
-
-#### Cleaner shell script
-
-```bash
-#!/usr/bin/env bash
-
-set -euo pipefail # error handling: 
-                  # -e: exit immediately if any command returns a non-zero exit status (error) 
-                  # -u: treat unset variables as an error and exit (useful for debugging)
-                  # -o pipefail: exit if any command in a pipeline fails (useful for debugging)
-
-# Directories
-# Input directory
-INPUT_DIR="01_data"
-
-# Output directory
-OUTPUT_DIR="06_fastqc_parallel_improved"
-
-# Log directory
-LOG_DIR="logs"
-
-# Create required directories
-mkdir -p "$OUTPUT_DIR" "$LOG_DIR"
-
-# make them visible to subshells that parallel spawns
-export OUTPUT_DIR LOG_DIR INPUT_DIR
-
-# Load required modules
-module load parallel
-module load fastqc
-
-# Run FastQC
-parallel -j10 \
-  'fastqc "{1}" -o "$OUTPUT_DIR/" > "$LOG_DIR/05_fastqc_parallel_improved_{1/.}.log" 2>&1' \
-  ::: $INPUT_DIR/*.fastq.gz
-```
-
-Add the above script to `00_scripts/05_fastqc_parallel_improved.sh`.
-
-Make it executable:
-
-```bash
-chmod +x 00_scripts/05_fastqc_parallel_improved.sh
-```
-
-Run the script:
-
-```bash
-time ./00_scripts/05_fastqc_parallel_improved.sh
-```
-
-<details>
-<summary>Output</summary>
-<pre>
-real    0m30.624s
-user    2m53.930s
-sys     0m6.853s
-</pre>
-</details>
-
 
 ---
 
@@ -555,20 +433,18 @@ If you remember just one thing: you don’t run heavy work directly on the head 
 ## Key words
 
 - **Cluster**: Many connected computers that can work in parallel.
-- **Head/Login node**: Where you log in, write scripts, submit jobs. Do not run heavy jobs here.
-- **Compute node**: Where your jobs actually run.
-- **Job**: A task you ask SLURM to run. It gets a numeric Job ID.
+- **Job ID**: Every job you submit gets a numeric ID, used to monitor or cancel it.
 - **Partition (queue)**: A grouping of nodes with certain limits (e.g., time, size). You submit jobs to a partition.
 - **Account**: The project or allocation that pays for/authorizes compute usage.
 - **Resources**: CPUs/cores, memory (RAM), time limit.
-- **Job states**: PENDING (PD, waiting), RUNNING (R), CONFIGURING (CG), COMPLETING (CG), FAILED (F), CANCELLED (CA).
+- **Job states**: PENDING (PD, waiting), RUNNING (R), COMPLETING (CG), COMPLETED (CD), FAILED (F), CANCELLED (CA).
 
 ---
 
 ## Two ways to use SLURM
 
-- **Batch job (sbatch)**: You submit a script and SLURM runs it in the background on a compute node. Best for pipelines.
 - **Interactive job (srun)**: You request a shell on a compute node for hands-on work or quick testing.
+- **Batch job (sbatch)**: You submit a script and SLURM runs it in the background on a compute node. Best for pipelines and long running jobs.
 
 ---
 
@@ -598,31 +474,36 @@ Tip: Use `history | grep sbatch` to find previous submissions.
 
 ---
 
----
-
 ## Running a SLURM job
 
-We are going to use the `05_fastqc_parallel_improved.sh` script as an example. In the `05_fastqc_parallel_improved.sh` script, change the output directory to `07_fastqc_slurm`.
+We will submit the `03_fastqc_loop_samplename.sh` script from Part 1 as a batch job. Create the SLURM script:
+
+```bash
+touch 00_scripts/04_fastqc.slurm
+```
+
+Add the following contents:
 
 ```bash
 #!/usr/bin/env bash
 
 # ===== SLURM directives (read by the scheduler) =====
-#SBATCH --job-name=fastqc            # a short name for your job
+#SBATCH --job-name=fastqc                 # a short name for your job
 #SBATCH --account=short_term              # account/allocation
 #SBATCH --partition=interactive           # partition/queue
 #SBATCH --time=00:05:00                   # max wall time (hh:mm:ss)
 #SBATCH --nodes=1                         # number of nodes
-#SBATCH --cpus-per-task=10                # number of CPU cores
-#SBATCH --mem=8G                          # memory per node
+#SBATCH --cpus-per-task=1                 # number of CPU cores
+#SBATCH --mem=2G                          # memory per node
 #SBATCH --output=logs/%x_%j.out           # STDOUT (%x=job-name, %j=jobid)
 #SBATCH --error=logs/%x_%j.err            # STDERR
-#SBATCH --mail-user=user@iastate.edu  # email address
-#SBATCH --mail-type=END,FAIL                  # send email when the job ends or fails
+##SBATCH --mail-user=user@iastate.edu     # email address
+##SBATCH --mail-type=END,FAIL             # send email when the job ends or fails
 
-set -euo pipefail
+# Always start in the submission directory for predictable paths
+cd "$SLURM_SUBMIT_DIR"
 
-00_scripts/05_fastqc_parallel_improved.sh
+./00_scripts/03_fastqc_loop_samplename.sh
 ```
 
 **Explanation of the directives above**
@@ -643,10 +524,10 @@ set -euo pipefail
   - Number of compute nodes requested. Most single-node tools/pipelines use 1.
 
 - `#SBATCH --cpus-per-task=10`
-  - CPU cores available to your task. Match this to your internal parallelism (e.g., GNU Parallel `-j 10` or a tool’s `--threads 10`).
+  - CPU cores available to your task. Match this to what your program can use (e.g., a tool’s `--threads 4`). Our loop runs one FastQC at a time, so 1 core is enough.
 
 - `#SBATCH --mem=8G`
-  - Total memory on the node reserved for your job. Ensure it covers the peak combined usage of all concurrent processes.
+  - Total memory on the node reserved for your job. Ensure it covers the peak usage of your program.
 
 - `#SBATCH --output=logs/%x_%j.out`
   - File for standard output (STDOUT). `%x` = job name, `%j` = job ID (e.g., `logs/fastqc_8249780.out`).
@@ -655,24 +536,19 @@ set -euo pipefail
   - File for standard error (STDERR). Check here for module load messages and errors.
 
 - `#SBATCH --mail-user=user@iastate.edu`
-  - Email address to receive job notifications.
+  - Email address to receive job notifications. These two lines start with `##` (disabled); remove one `#` and use your own address to enable them.
 
 - `#SBATCH --mail-type=END,FAIL`
   - When to send emails. Options include `BEGIN`, `END`, `FAIL`, or `ALL`. `END,FAIL` is a good default that avoids "job started" noise.
 
 - **Log directory gotcha**: SLURM opens `--output`/`--error` files *before* your script runs, so the directory must exist at submit time. If `logs/` does not exist when you run `sbatch`, the job fails immediately. Create it first (`mkdir -p logs`) — `mkdir -p` inside the script is too late for these directives.
 
-Notes:
-- If you launch 10 FastQC processes in parallel, `--cpus-per-task=10` is appropriate; otherwise, lower it to match your actual concurrency.
-- Memory must scale with concurrency. If each process needs ~1G and you run 10 in parallel, consider `--mem=10G` or more.
-- The job starts in the submission directory by default; to be explicit, add `cd "$SLURM_SUBMIT_DIR"` near the top of the script.
-
-Save the above script as `06_fastqc.slurm` in `00_scripts` directory.
+Note: `cd "$SLURM_SUBMIT_DIR"` makes the job start in the directory where you ran `sbatch`, so relative paths like `01_data/` work.
 
 **How to submit and check:**
 
 ```bash
-sbatch 00_scripts/06_fastqc.slurm
+sbatch 00_scripts/04_fastqc.slurm
 ```
 
 **Check the status of the job:**
@@ -697,7 +573,7 @@ cat logs/fastqc_*.out
 cat logs/fastqc_*.err
 ```
 
-In this case, the fastqc*.out file is empty. This is because the output of the fastqc command is redirected to the log file. The fastqc*.err file contains the error messages, particularly the loading of the modules.
+In this case, the `.out` file contains the `Running FastQC on: ...` lines echoed by the script. The FastQC output itself goes to the per-sample files in `logs/`, and the `.err` file holds any module or error messages.
 
 **Check efficiency**
 
@@ -728,9 +604,6 @@ Memory Efficiency: 40.83% of 8.00 GB (8.00 GB/node)
 - **Job Wall-clock time**: The total time the job took to complete, from start to finish. This includes time spent waiting for resources, loading data, and running the actual computation.
 - **Memory Utilized**: The amount of memory the job actually used. In this case, the job used 3.27 GB of memory.
 - **Memory Efficiency**: The percentage of the requested memory that was actually used. Here, the job used 40.83% of the 8 GB of memory it requested.
-
----
-
 
 ---
 
@@ -771,7 +644,7 @@ sacct -j <JOBID> --format=JobID,JobName%20,State,Elapsed,ExitCode
 
 ### Try it: break a job on purpose
 
-Make a copy of `06_fastqc.slurm` called `06_fastqc_broken.slurm` and change the data path:
+Make a copy of `04_fastqc.slurm` called `04_fastqc_broken.slurm` and replace the last line with a command that uses a wrong data path:
 
 ```bash
 #SBATCH --job-name=fastqc_broken
@@ -779,10 +652,12 @@ Make a copy of `06_fastqc.slurm` called `06_fastqc_broken.slurm` and change the 
 
 set -euo pipefail
 
+module load fastqc
+mkdir -p 02_fastqc
 fastqc 01_data/DOES_NOT_EXIST.fastq.gz -o 02_fastqc/
 ```
 
-1. Submit it: `sbatch 00_scripts/06_fastqc_broken.slurm`
+1. Submit it: `sbatch 00_scripts/04_fastqc_broken.slurm`
 2. Check the state: `sacct -j <JOBID> --format=JobID,State,ExitCode` → `FAILED`
 3. Find the error: `cat logs/fastqc_broken_*.err`
 4. Fix the path and resubmit — verify it goes to `COMPLETED`.
@@ -823,7 +698,7 @@ If a job sits pending with `(ReqNodeNotAvail)`, cancel it and reduce your reques
 
 ### Try it: cancel a job
 
-1. Submit a job with an absurdly long time: copy `06_fastqc.slurm`, set `--time=4:00:00`, submit it.
+1. Submit a job with an absurdly long time: copy `04_fastqc.slurm`, set `--time=4:00:00`, submit it.
 2. Check `squeue -u $USER` — note the Job ID.
 3. Cancel it: `scancel <JOBID>`
 4. Confirm it is gone: `squeue -u $USER` (empty), and `sacct -j <JOBID>` shows `CANCELLED`.
@@ -856,15 +731,14 @@ Inside a running job, SLURM sets variables your script can read instead of hardc
 | `$SLURM_ARRAY_TASK_COUNT`   | Total number of array tasks      |
 | `$SLURM_SUBMIT_DIR`         | Directory you ran `sbatch` from  |
 
-Use them to keep the script and `#SBATCH` directives in sync — e.g., match GNU Parallel's concurrency to the CPUs you requested:
+Use them to keep the script and `#SBATCH` directives in sync — e.g., pass the CPUs you requested to a program's thread option:
 
 ```bash
-parallel -j "$SLURM_CPUS_PER_TASK" \
-  'fastqc {1} -o 05_fastqc_parallel/ > logs/fastqc_{1/.}.log 2>&1' \
-  ::: 01_data/*.fastq.gz
+fastqc -t "$SLURM_CPUS_PER_TASK" 01_data/bio_sample_01_R1.fastq.gz -o 02_fastqc/
 ```
 
-Now changing `--cpus-per-task` automatically changes `-j` — no way to oversubscribe by forgetting one of them.
+Now changing `--cpus-per-task` automatically changes `-t`, so the two cannot get out of sync.
+
 
 ## Part 3: SLURM Job Arrays
 
@@ -886,7 +760,7 @@ Array jobs let you run the same command over many inputs (e.g., all FASTQ files)
 
 ### Example: FastQC over all files in 01_data/ using an array
 
-Create `00_scripts/07_fastqc_array.slurm`:
+Create `00_scripts/05_fastqc_array.slurm`:
 
 ```bash
 #!/usr/bin/env bash
@@ -910,22 +784,20 @@ set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
 # Output directory 
-OUTPUT_DIR=08_fastqc_slurm_array
-SLURM_LOGS=slurm_logs
+OUTPUT_DIR=06_fastqc_slurm_array
 APP_LOGS=app_logs
 
-# Ensure output directories exist
-mkdir -p $SLURM_LOGS $APP_LOGS $OUTPUT_DIR
+mkdir -p $APP_LOGS $OUTPUT_DIR
 
-# Optional: load modules needed by the job
-module load fastqc || true
+module purge
+module load fastqc
 
 # Build the file list. The array index selects which file this task processes.
 FILES=(01_data/*.fastq.gz)
 TARGET="${FILES[$SLURM_ARRAY_TASK_ID]}"
 
-# Derive a clean basename for naming logs and outputs (beginner-friendly)
-sample_id=$(basename "$TARGET" .fastq.gz)        # e.g., bio_sample_01_R1
+# Derive a clean basename for naming logs (e.g., bio_sample_01_R1)
+sample_id=$(basename "$TARGET" .fastq.gz)
 
 fastqc "$TARGET" -o $OUTPUT_DIR/ \
   > "$APP_LOGS/fastqc_slurm_array_${sample_id}.log" 2>&1
@@ -935,17 +807,18 @@ fastqc "$TARGET" -o $OUTPUT_DIR/ \
 
 - `--array=0-9` launches 10 tasks with `SLURM_ARRAY_TASK_ID` set to 0..9.
 - Inside the script, `FILES=(01_data/*.fastq.gz)` builds the list of inputs; each task picks `FILES[$SLURM_ARRAY_TASK_ID]`.
-- `--cpus-per-task=1` and `--mem=2G` are per-task requests. With arrays, parallelism comes from many tasks; keep per-task CPU/memory modest.
+- `--cpus-per-task=2` and `--mem=2G` are per-task requests. With arrays, concurrency comes from many tasks; keep per-task CPU/memory modest.
 - Log patterns `%A` (master job ID) and `%a` (array index) help separate per-task stdout/stderr.
 
 Tips:
 - If your files can be very large, increase `--time` and `--mem` per task accordingly.
-- Avoid combining GNU Parallel with large arrays unless you adjust `--cpus-per-task` and the tool’s `-j/--threads` to avoid oversubscription.
+- Match `--cpus-per-task` to any thread option your tool uses (e.g., `fastqc -t "$SLURM_CPUS_PER_TASK"`).
 
-Submit for all files in `01_data/`:
+Submit for all files in `01_data/`. The `slurm_logs/` directory must exist before submitting because SLURM opens the log files first:
 
 ```bash
-sbatch 00_scripts/07_fastqc_array.slurm
+mkdir -p slurm_logs
+sbatch 00_scripts/05_fastqc_array.slurm
 ```
 
 **Check the status of the job:**
@@ -976,46 +849,12 @@ squeue -u $USER
 JOBID: 8250375_0, 8250375_2, …, 8250375_9
 8250375 is the master job ID; the suffix _ is the array task index (0–9). Each line is one array task.
 
-**Alternative:Count files and submit a matching array**
+**Alternative: count files and submit a matching array**
 
 ```bash
-# Count files and submit a matching array
 N=$(ls 01_data/*.fastq.gz | wc -l)
-sbatch --array=0-$((N-1)) 00_scripts/07_fastqc_array.slurm
-
-# Alternatively, if you know there are 10 files (0..9):
-# sbatch --array=0-9 00_scripts/07_fastqc_array.slurm
+sbatch --array=0-$((N-1)) 00_scripts/05_fastqc_array.slurm
 ```
-
-### Throttling an array with `%`
-
-When you have hundreds of tasks, you usually don't want them all running at once — they would compete for disk I/O and use up your fair share quickly. `%N` caps how many tasks run concurrently:
-
-```bash
-# Run tasks 0-9, but at most 3 at a time
-sbatch --array=0-9%3 00_scripts/07_fastqc_array.slurm
-```
-
-Only 3 tasks run; the rest stay `PENDING` until a slot frees. Try it: submit `--array=0-9%3` and watch `squeue` — you'll see 3 running, 7 pending.
-
-### A more robust input list: the manifest file
-
-`FILES=(01_data/*.fastq.gz)` works here, but it has a subtlety worth knowing: the array index→file mapping depends on glob order. If files are added/removed between the first run and a retry of failed indices, the indices point at different files. For real projects, write a **manifest** — an explicit list — so index N always means the same file:
-
-```bash
-# Create the manifest once, at submit time
-ls 01_data/*.fastq.gz > filelist.txt
-N=$(wc -l < filelist.txt)
-sbatch --array=1-$N 00_scripts/07_fastqc_array.slurm
-```
-
-And in the script, pick the file by line number instead of a bash array:
-
-```bash
-TARGET=$(sed -n "${SLURM_ARRAY_TASK_ID}p" filelist.txt)
-```
-
-(Note the array starts at 1 here because `sed` line numbers are 1-based.) The manifest is also a record of *exactly* which inputs a run used — worth keeping.
 
 **seff the job**
 
@@ -1103,59 +942,35 @@ JobID                     JobName      State    Elapsed     MaxRSS  AllocCPUS   
 
 So each array task has a main job entry, plus `.batch` and `.extern` sub-entries.
 
-**More Reading**
+### Throttling an array with `%`
 
-<details>
-<summary><strong>GNU Parallel vs SLURM Array</strong></summary>
+When you have hundreds of tasks, you usually don't want them all running at once — they would compete for disk I/O and use up your fair share quickly. `%N` caps how many tasks run concurrently:
 
-- What they do
-  - GNU Parallel: run many commands concurrently inside a single job allocation.
-  - SLURM Array: launch many tasks (one per input) as separate scheduled tasks.
+```bash
+# Run tasks 0-9, but at most 3 at a time
+sbatch --array=0-9%3 00_scripts/05_fastqc_array.slurm
+```
 
-- When to use which
-  - GNU Parallel
-    - Best when you already have one allocation (interactive srun or one batch job) and want to fan out work within it.
-    - Simple to cap concurrency and share memory/CPUs among tasks on one node.
-  - SLURM Array
-    - Best when you want per-input scheduling, isolation, and accounting — and the ability to scale across nodes.
-    - Easy to retry only failed indices.
+Only 3 tasks run; the rest stay `PENDING` until a slot frees. Try it: submit `--array=0-9%3` and watch `squeue` — you'll see 3 running, 7 pending.
 
-- Resource accounting and debugging
-  - GNU Parallel
-    - One job’s stdout/stderr unless you manually split logs per file.
-    - One seff summary for the whole job; per-file timing via your own logs.
-  - SLURM Array
-    - Per-task stdout/stderr and per-task seff/sacct.
-    - Clear which inputs failed or were slow.
+### A more robust input list: the manifest file
 
-- Failure isolation
-  - GNU Parallel: a failing command doesn’t necessarily stop the whole job; handle exit codes yourself.
-  - SLURM Array: failures are isolated to their indices; other tasks continue.
+`FILES=(01_data/*.fastq.gz)` works here, but it has a subtlety worth knowing: the array index→file mapping depends on glob order. If files are added/removed between the first run and a retry of failed indices, the indices point at different files. For real projects, write a **manifest** — an explicit list — so index N always means the same file:
 
-- Queue behavior and limits
-  - GNU Parallel: queue once, then manage parallelism internally on the node you obtained.
-  - SLURM Array: each task queues separately; site policies may cap concurrent array tasks.
+```bash
+# Create the manifest once, at submit time
+ls 01_data/*.fastq.gz > filelist.txt
+N=$(wc -l < filelist.txt)
+sbatch --array=1-$N 00_scripts/05_fastqc_array.slurm
+```
 
-- Avoid oversubscription
-  - GNU Parallel inside SLURM: align -j with CPUs you requested.
-    ```bash
-    parallel -j "$SLURM_CPUS_PER_TASK" \
-      'fastqc {1} -o 02h_fastqc_parallel/ > logs/02h_fastqc_parallel_{1/.}.log 2>&1' \
-      ::: 01_data/*.fastq.gz
-    ```
-  - SLURM Array: keep per-task CPU/memory modest (e.g., --cpus-per-task=1–2, --mem=1–4G) and let SLURM scale via many tasks.
-    ```bash
-    N=$(ls 01_data/*.fastq.gz | wc -l)
-    sbatch --array=0-$((N-1)) 00_scripts/07_fastqc_array.slurm
-    ```
+And in the script, pick the file by line number instead of a bash array:
 
-- Rules of thumb
-  - Small dataset, one node available now → GNU Parallel for quick turnaround.
-  - Many files, want per-input tracking/retry, or need to scale across nodes → SLURM Array.
-  - Always align concurrency with resources to avoid oversubscribing CPUs/memory.
+```bash
+TARGET=$(sed -n "${SLURM_ARRAY_TASK_ID}p" filelist.txt)
+```
 
-</details>
-
+(Note the array starts at 1 here because `sed` line numbers are 1-based.) The manifest is also a record of *exactly* which inputs a run used — worth keeping.
 
 ### Handling Failures: The "Swiss Cheese" Array
 
@@ -1169,7 +984,7 @@ You don't want to re-run everything. Check which IDs failed (look at logs or `sa
 Then submit only the failed jobs:
 
 ```bash
-sbatch --array=46,89 00_scripts/07_fastqc_array.slurm
+sbatch --array=46,89 00_scripts/05_fastqc_array.slurm
 ```
 Slurm allows comma-separated lists and ranges!
 
@@ -1180,8 +995,8 @@ Slurm allows comma-separated lists and ranges!
 Real pipelines have ordered steps: align → sort → count, or FastQC → MultiQC. Instead of watching `squeue` and submitting the next step by hand, tell SLURM the order:
 
 ```bash
-JOB1=$(sbatch --parsable 00_scripts/07_fastqc_array.slurm)
-sbatch --dependency=afterok:$JOB1 00_scripts/08_multiqc.slurm
+JOB1=$(sbatch --parsable 00_scripts/05_fastqc_array.slurm)
+sbatch --dependency=afterok:$JOB1 00_scripts/06_multiqc.slurm
 ```
 
 - `sbatch --parsable` prints just the job ID, so you can capture it in a variable.
@@ -1198,10 +1013,11 @@ Common dependency types:
 
 You can also edit a dependency after submission: `scontrol update job=<JOBID> dependency=afterok:<JOB1>`.
 
-Example follow-up script (`00_scripts/08_multiqc.slurm`) that aggregates the FastQC results:
+Example follow-up script (`00_scripts/06_multiqc.slurm`) that aggregates the FastQC results:
 
 ```bash
 #!/usr/bin/env bash
+
 #SBATCH --job-name=multiqc
 #SBATCH --account=short_term
 #SBATCH --partition=interactive
@@ -1214,52 +1030,64 @@ Example follow-up script (`00_scripts/08_multiqc.slurm`) that aggregates the Fas
 set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 
+module purge
 module load multiqc
-multiqc 08_fastqc_slurm_array/ -o 09_multiqc/
+
+multiqc 06_fastqc_slurm_array/ -o 07_multiqc/
 ```
 
 Submit the pair and watch the second sit `PENDING` with reason `(Dependency)` until the array finishes.
 
 ---
 
-## Part 4: Strategy, Flowcharts & Wrap-up
+## Part 4: Strategy & Wrap-up
 
 How do you choose between the different methods? Use this simple rule of thumb based on **Task Duration** and **Quantity**.
 
 ### The Decision Matrix
 
-| Task Duration | Number of Tasks | Best Strategy                                      |
-| :-----------: | :-------------: | :------------------------------------------------- |
-| < 1 minute    | Any             | **GNU Parallel**                                   |
-| 1-15 minutes  | < 50            | **GNU Parallel** in a single job                   |
-| 1-15 minutes  | 50-1000         | **GNU Parallel** split into multiple jobs          |
-| 15 min - 4 hours | < 500        | **Slurm Job Array**                                |
-| 15 min - 4 hours | 500+         | **Slurm Job Array** with `%` throttle              |
-| 4+ hours      | Any             | **Slurm Job Array** (consider checkpointing)       |
-| 1000s of short tasks | Any      | **Task Grouping** (bundle tasks into array elements) |
+| Task Duration | Number of Tasks | Best Strategy |
+| :--- | :--- | :--- |
+| < 1 minute | Few (total < ~1 hour) | Bash loop in a single job |
+| < 1 minute | Many | **Task grouping** (bundle many tasks per array element) |
+| 1-15 minutes | < 50 | Bash loop in a single job, or a **job array** |
+| 1-15 minutes | 50+ | **Job array** with `%` throttle, or task grouping |
+| 15 min - 4 hours | < 500 | **Job array** |
+| 15 min - 4 hours | 500+ | **Job array** with `%` throttle |
+| 4+ hours | Any | **Job array** (consider checkpointing) |
 
 ### Real-World Scenarios
 
 #### Scenario 1: Image Thumbnails
-> 5,000 images, each takes 3 seconds to resize.
+> 200 images, each takes 3 seconds to resize.
 
-**Best choice**: **GNU Parallel**  
-- Tasks are too short for arrays (scheduler overhead would dominate this).
-- Pack into a single 2-hour job running 16 at a time.
+**Best choice**: **Bash loop in a single job**
+- The whole run takes about 10 minutes, and tasks are too short for an array (scheduler overhead would dominate).
 
 #### Scenario 2: RNA-seq Alignment
 > 48 samples, each takes 2 hours, uses 8 CPUs and 32GB RAM.
 
-**Best choice**: **Slurm Job Array**  
+**Best choice**: **Job array**
 - Long-running tasks benefit from independent logging.
 - Each sample may have different failure modes, and it is easy to re-run failed samples.
 
 #### Scenario 3: Parameter Sweep
 > 10,000 simulations, each takes 30 seconds.
 
-**Best choice**: **Task Grouping with GNU Parallel**  
+**Best choice**: **Task grouping**
 - 10,000 array tasks would overwhelm the scheduler.
-- Bundle 100 simulations per array task (100 array elements) using bash logic to split them.
+- Bundle 100 simulations per array task (100 array elements) using bash logic to split them:
+
+```bash
+# --array=1-100
+START=$(( (SLURM_ARRAY_TASK_ID - 1) * 100 + 1 ))
+END=$(( START + 99 ))
+
+for i in $(seq $START $END)
+do
+  ./run_simulation.sh $i
+done
+```
 
 ---
 
