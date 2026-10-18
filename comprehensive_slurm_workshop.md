@@ -6,30 +6,36 @@
 
 ## Quick start
 
-- VS Code Server on Nova OnDemand through a browser: `https://nova-ondemand.its.iastate.edu/`
+1. Log in to Nova OnDemand through a browser: [https://nova-ondemand.its.iastate.edu/](https://nova-ondemand.its.iastate.edu/)
 
-  ```
-  Account: short_term
-  Partition: interactive
-  Number of hour: 5
-  Number of Tasks per node: 10
-  Memory Required: 8G
-  Working Directory: `/work/short_term`
-  ```
+2. From the top menu bar, choose **Clusters → Nova Shell Access**.
 
-- Create a directory for each user
+   <img src="assets/01_shell_access.png" alt="Nova OnDemand Clusters menu showing Nova Shell Access option" width="700"/>
+
+3. In the shell that opens, do the following:
 
 ```bash
+pwd
+# /home/$USER
+
+cd /work/short_term
 mkdir -p $USER
 cd $USER
 ```
 
-- Copy the data to your directory
+4. Later in the workshop we will edit scripts with VS Code Server. Open it from Nova OnDemand when needed:
 
-```bash
-cp -r /work/short_term/satheesh/01_data .
-git clone https://github.com/ISUgenomics/slurm-workshop-2026.git
-```
+   - Interactive Apps → **VS Code Server**
+   - Suggested settings:
+
+     ```
+     Account: short_term
+     Partition: interactive
+     Number of hour: 5
+     Number of Tasks per node: 10
+     Memory Required: 8G
+     Working Directory: `/work/short_term`
+     ```
 
 ## Part 1: Running commands and making a script of the commands run
 
@@ -61,9 +67,42 @@ If you want a short interactive session on a compute node:
 srun --account=short_term --partition=interactive \
      --time=00:15:00 --cpus-per-task=2 --mem=2G \
      --pty bash
+
+nproc
+# 2
 ```
 
-You’ll get a shell on a compute node where you can run commands interactively. Exit with `exit` or Ctrl-D.
+You’ll get a shell on a compute node where you can run commands interactively. When you run `nproc`, you should see `2` as the output. That is the number of CPUs requested on this compute node (via `--cpus-per-task=2`). 
+
+> Note: Exit with `exit` or Ctrl-D.
+
+### Copy the data folder
+
+This is a good first task to run on the compute node. Inside your interactive session, copy the workshop data and scripts into your working directory:
+
+```bash
+time cp -r /work/short_term/workshop_materials/satheesh_bash/01_data .
+```
+
+```
+real    0m3.518s
+user    0m0.001s
+sys     0m0.584s
+```
+
+- `real`: wall-clock time — how long the copy took from start to finish.
+- `user`: CPU time spent by the program itself (almost nothing for `cp`, since most work is I/O).
+- `sys`: CPU time spent by the kernel moving data between disk and memory.
+
+For file copies, `real` is what you care about; `user` is tiny because `cp` spends most of its time waiting on the disk.
+
+### Clone the workshop repository
+
+```bash
+git clone https://github.com/ISUgenomics/slurm-workshop-2026.git
+```
+
+This repository contains the scripts that we are going to use. We will use these scripts in case we run into issues with the ones we create. 
 
 ### What are the files in the data folder?
 
