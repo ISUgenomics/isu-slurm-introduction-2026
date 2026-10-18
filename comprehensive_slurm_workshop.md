@@ -26,6 +26,9 @@ cd $USER
 4. Later in the workshop we will edit scripts with VS Code Server. Open it from Nova OnDemand when needed:
 
    - Interactive Apps → **VS Code Server**
+
+     <img src="assets/02_vscode_server.png" alt="Nova OnDemand Interactive Apps menu showing VS Code Server option" width="700"/>
+
    - Suggested settings:
 
      ```
@@ -34,8 +37,12 @@ cd $USER
      Number of hour: 5
      Number of Tasks per node: 10
      Memory Required: 8G
-     Working Directory: `/work/short_term`
+     Working Directory: `/work/short_term/$USER`
      ```
+
+   The form should look similar to this before you click **Launch**:
+
+   <img src="assets/03_vscode_server_form.png" alt="VS Code Server launch form with account, partition, time, CPUs, memory, and working directory fields" width="700"/>
 
 ## Part 1: Running commands and making a script of the commands run
 
