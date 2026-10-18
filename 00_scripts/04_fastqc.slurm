@@ -13,8 +13,6 @@
 ##SBATCH --mail-user=user@iastate.edu     # email address
 ##SBATCH --mail-type=END,FAIL             # send email when the job ends or fails
 
-set -euo pipefail
-
 # Always start in the submission directory for predictable paths
 cd "$SLURM_SUBMIT_DIR"
 

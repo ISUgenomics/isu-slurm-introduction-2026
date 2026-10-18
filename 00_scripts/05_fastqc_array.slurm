@@ -13,8 +13,6 @@
 #SBATCH --error=slurm_logs/%x_%A_%a.err
 #SBATCH --array=0-9
 
-set -euo pipefail
-
 # Always start in the submission directory for predictable paths
 cd "$SLURM_SUBMIT_DIR"
 
