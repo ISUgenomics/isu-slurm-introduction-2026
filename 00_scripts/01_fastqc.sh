@@ -1,3 +1,5 @@
+#!/bin/bash
+
 module purge
 module load fastqc
 mkdir -p 02_fastqc logs
