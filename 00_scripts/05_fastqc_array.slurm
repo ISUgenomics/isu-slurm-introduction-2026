@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 # ===== SLURM directives =====
 #SBATCH --job-name=fastqc_array
@@ -18,23 +18,20 @@ set -euo pipefail
 # Always start in the submission directory for predictable paths
 cd "$SLURM_SUBMIT_DIR"
 
-# Output directory 
-OUTPUT_DIR=08_fastqc_slurm_array
-SLURM_LOGS=slurm_logs
+OUTPUT_DIR=06_fastqc_slurm_array
 APP_LOGS=app_logs
 
-# Ensure output directories exist
-mkdir -p $SLURM_LOGS $APP_LOGS $OUTPUT_DIR
+mkdir -p $APP_LOGS $OUTPUT_DIR
 
-# Load modules needed by the job
-module load fastqc || true
+module purge
+module load fastqc
 
 # Build the file list. The array index selects which file this task processes.
 FILES=(01_data/*.fastq.gz)
 TARGET="${FILES[$SLURM_ARRAY_TASK_ID]}"
 
-# Derive a clean basename for naming logs and outputs (beginner-friendly)
-sample_id=$(basename "$TARGET" .fastq.gz)        # e.g., bio_sample_01_R1
+# Derive a clean basename for naming logs (e.g., bio_sample_01_R1)
+sample_id=$(basename "$TARGET" .fastq.gz)
 
 fastqc "$TARGET" -o $OUTPUT_DIR/ \
   > "$APP_LOGS/fastqc_slurm_array_${sample_id}.log" 2>&1
