@@ -169,8 +169,20 @@ Let's write scripts.
 
 ```bash
 mkdir -p 00_scripts
+```
+
+Now, let's write a script to run FastQC on one file.
+Let's create the file with `touch`. 
 
 ```bash
+touch 00_scripts/01_fastqc.sh
+```
+
+Now, let's write the script. 
+
+```bash
+#!/bin/bash
+
 module purge
 module load fastqc
 mkdir -p 02_fastqc logs
@@ -178,11 +190,14 @@ fastqc 01_data/bio_sample_01_R1.fastq.gz -o 02_fastqc/ > logs/01_fastqc.log 2>&1
 ```
 
 - Explanation of the command in the script:
+  - `#!/bin/bash` - This is the shebang line that tells the system to use the Bash shell to execute the script.
+  - `module purge` - This unloads any currently loaded modules.
+  - `module load fastqc` - This loads the FastQC module.
+  - `mkdir -p 02_fastqc logs` - This creates the `02_fastqc/` and `logs/` directories if they don't already exist.
   - `fastqc 01_data/bio_sample_01_R1.fastq.gz -o 02_fastqc/` runs FastQC on the input file and writes the results to the `02_fastqc/` directory.
   - `> logs/01_fastqc.log` redirects standard output (stdout, file descriptor 1) to the log file, overwriting it if it exists.
   - `2>&1` redirects standard error (stderr, file descriptor 2) to the same destination as stdout, so both stdout and stderr end up in `logs/01_fastqc.log`.
   - This pattern is useful to capture all program messages for troubleshooting and record-keeping. Ensure `logs/` exists (we created it with `mkdir -p logs`).
-  - Tip: If you want to see the output live and also save it, you can use `tee`, e.g., `... 2>&1 | tee logs/01_fastqc.log`.
 
 **Make the script an executable file**
 
@@ -195,21 +210,6 @@ chmod +x 00_scripts/01_fastqc.sh
 ```bash
 time ./00_scripts/01_fastqc.sh 
 ```
-
-**Output**
-
-```
-real    0m6.949s
-user    0m7.568s
-sys     0m0.597s
-```
-
-- `real`: The wall-clock time — how long the command took from start to finish
-          Includes everything: CPU time, waiting for I/O (disk, network), scheduling delays, etc.
-- `user`: The amount of CPU time spent in user space (your program’s own code, libraries, calculations).
-          Example: crunching numbers in Python, sorting data, compressing a file.
-- `sys` : The amount of CPU time spent in kernel space (system calls and OS overhead).
-          Example: reading/writing files, allocating memory, handling I/O requests.
 
 #### Multiple files (looping through files)
 
