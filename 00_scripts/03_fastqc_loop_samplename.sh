@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 module purge
 module load fastqc
@@ -9,8 +9,8 @@ LOG_DIR=logs
 
 mkdir -p $OUTPUT_DIR $LOG_DIR
 
-for file in $INPUT_DIR/*.fastq.gz 
-do  
+for file in $INPUT_DIR/*.fastq.gz
+do
   sample_id=$(basename "$file" .fastq.gz)
   echo "Running FastQC on: $sample_id"
   fastqc $file -o $OUTPUT_DIR/ > $LOG_DIR/03_fastqc_loop_$sample_id.log 2>&1

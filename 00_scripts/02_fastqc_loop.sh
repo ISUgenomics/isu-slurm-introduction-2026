@@ -1,9 +1,9 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 module purge
 module load fastqc
 
-mkdir -p 03_fastqc_loop
+mkdir -p 03_fastqc_loop logs
 
 for file in 01_data/*.fastq.gz
 do

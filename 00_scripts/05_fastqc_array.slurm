@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # ===== SLURM directives =====
 #SBATCH --job-name=fastqc_array
@@ -16,7 +16,7 @@
 # Always start in the submission directory for predictable paths
 cd "$SLURM_SUBMIT_DIR"
 
-OUTPUT_DIR=06_fastqc_slurm_array
+OUTPUT_DIR=05_fastqc_slurm_array
 APP_LOGS=app_logs
 
 mkdir -p $APP_LOGS $OUTPUT_DIR

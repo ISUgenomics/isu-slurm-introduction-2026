@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # ===== SLURM directives (read by the scheduler) =====
 #SBATCH --job-name=fastqc                 # a short name for your job
