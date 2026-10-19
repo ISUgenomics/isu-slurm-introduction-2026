@@ -578,32 +578,62 @@ In this case, the `.out` file contains the `Running FastQC on: ...` lines echoed
 **Check efficiency**
 
 ```bash
-seff 8249780
+seff 16996341
 ```
 
 `seff` is a useful tool to check the efficiency of a job. It shows the actual time the job spent using the CPU and the percentage of the requested CPU time that was actually used.
 
 <pre>
-Job ID: 8249780
+Job ID: 16996341
 Cluster: nova
 User/Group: satheesh/domain users
 State: COMPLETED (exit code 0)
 Nodes: 1
-Cores per node: 10
-CPU Utilized: 00:01:59
-CPU Efficiency: 59.50% of 00:03:20 core-walltime
-Job Wall-clock time: 00:00:20
-Memory Utilized: 3.27 GB
-Memory Efficiency: 40.83% of 8.00 GB (8.00 GB/node)
+Cores per node: 2
+CPU Utilized: 00:01:55
+CPU Efficiency: 60.53% of 00:03:10 core-walltime
+Job Wall-clock time: 00:01:35
+Memory Utilized: 332.67 MB
+Memory Efficiency: 16.24% of 2.00 GB (2.00 GB/node)
 </pre>
 
 **Explanation of efficiency metrics**
 
-- **CPU Utilized**: The actual time the job spent using the CPU. In this case, the job used the CPU for 1 minute and 59 seconds.
-- **CPU Efficiency**: The percentage of the requested CPU time that was actually used. Here, the job used 59.50% of the 3 minutes and 20 seconds of CPU time it requested.
-- **Job Wall-clock time**: The total time the job took to complete, from start to finish. This includes time spent waiting for resources, loading data, and running the actual computation.
-- **Memory Utilized**: The amount of memory the job actually used. In this case, the job used 3.27 GB of memory.
-- **Memory Efficiency**: The percentage of the requested memory that was actually used. Here, the job used 40.83% of the 8 GB of memory it requested.
+- **CPU Utilized**: The actual time the job spent using the CPU. In this case, the job used the CPU for 1 minute and 55 seconds.
+- **CPU Efficiency**: The percentage of the requested CPU time that was actually used. Here, the job used 60.53% of the 3 minutes and 10 seconds of CPU time it requested (2 cores x 1 minute 35 seconds).
+- **Job Wall-clock time**: The total time the job ran, from start to finish (it does not include time spent waiting in the queue).
+- **Memory Utilized**: The amount of memory the job actually used. In this case, the job used 332.67 MB of memory.
+- **Memory Efficiency**: The percentage of the requested memory that was actually used. Here, the job used 16.24% of the 2 GB of memory it requested.
+
+Now, let's check the job history using `sacct`:
+
+```bash
+sacct -j 16996341 --format=JobID,JobName%20,State,Elapsed,MaxRSS,AllocCPUS,CPUTime,ExitCode
+```
+
+```
+JobID                     JobName      State    Elapsed     MaxRSS  AllocCPUS    CPUTime ExitCode 
+------------ -------------------- ---------- ---------- ---------- ---------- ---------- -------- 
+16996341                   fastqc  COMPLETED   00:01:35                     2   00:03:10      0:0 
+16996341.ba+                batch  COMPLETED   00:01:35    340652K          2   00:03:10      0:0 
+16996341.ex+               extern  COMPLETED   00:01:35                     2   00:03:10      0:0 
+```
+
+**Explanation of the output**
+
+- `sacct` shows the job's accounting record. The `--format` option picks the columns, and `JobName%20` makes that column 20 characters wide.
+- The output has **three rows** for one job:
+  - `16996341` is the job itself. It shows the overall state, elapsed time and CPUs.
+  - `16996341.ba+` (`batch`) is the step where your script actually ran. This is the row to read for memory, because only it has a `MaxRSS` value.
+  - `16996341.ex+` (`extern`) tracks the resources reserved for the job as a whole. It has no `MaxRSS` and is usually not needed. The `+` means the name was shortened to fit the column.
+- Columns:
+  - `State`: `COMPLETED` means the script exited with code 0.
+  - `Elapsed`: wall-clock time, 1 minute 35 seconds.
+  - `MaxRSS`: peak memory used, `340652K` (about 333 MB). This matches the `Memory Utilized` value from `seff`.
+  - `AllocCPUS`: CPUs allocated to the job, here 2.
+  - `CPUTime`: `Elapsed` x `AllocCPUS`, so 1:35 x 2 = 3:10. This is the CPU time you reserved, not what you used.
+  - `ExitCode`: `0:0` is the script's exit code followed by the signal that stopped it. `0:0` means a clean finish.
+- Use `seff` for a quick efficiency summary and `sacct` when you need per-step details, failed states, or exit codes.
 
 ---
 
@@ -613,13 +643,7 @@ When writing a SLURM script, you request Time, Memory, and CPUs.
 1. **Request too little**: SLURM stops the job (OOM - Out Of Memory, or Time Limit).
 2. **Request too much**: 
    - You wait longer in the queue.
-   - You waste resources that others could use.
-   - Your "Fair Share" score drops, making future jobs wait longer.
-
-**Rule of Thumb**: Always run a single task first, measure it with `seff`, and then request **20-30% more** than the maximum you observed to be safe.
-
-**Why this matters for Arrays**: 
-If you run 1 job, reserving 4GB more than needed is a small cost. In an array of **1,000 jobs**, reserving 4GB extra each adds up to **4 Terabytes** of unused reservation — the tasks may take much longer to schedule.
+   - You consume resources that others could use.
 
 ---
 
@@ -640,17 +664,15 @@ If you see `command not found`, a module likely wasn't loaded. If you see `No su
 sacct -j <JOBID> --format=JobID,JobName%20,State,Elapsed,ExitCode
 ```
 
-`FAILED` with `ExitCode 1:0` usually means a command in your script errored; `TIMEOUT` means it hit `--time`; `OUT_OF_MEMORY` means it hit `--mem`.
+`FAILED` with a non-zero `ExitCode` (e.g., `1:0`) means a command in your script returned an error; `TIMEOUT` means it hit `--time`; `OUT_OF_MEMORY` means it hit `--mem`.
 
 ### Try it: break a job on purpose
 
-Make a copy of `04_fastqc.slurm` called `04_fastqc_broken.slurm` and replace the last line with a command that uses a wrong data path:
+Make a copy of `04_fastqc.slurm` called `04_fastqc_broken.slurm`, change the job name to `fastqc_broken`, and replace the last line with a command that uses a wrong data path:
 
 ```bash
 #SBATCH --job-name=fastqc_broken
 # (same directives as before)
-
-set -euo pipefail
 
 module load fastqc
 mkdir -p 02_fastqc
@@ -658,9 +680,42 @@ fastqc 01_data/DOES_NOT_EXIST.fastq.gz -o 02_fastqc/
 ```
 
 1. Submit it: `sbatch 00_scripts/04_fastqc_broken.slurm`
-2. Check the state: `sacct -j <JOBID> --format=JobID,State,ExitCode` → `FAILED`
-3. Find the error: `cat logs/fastqc_broken_*.err`
-4. Fix the path and resubmit — verify it goes to `COMPLETED`.
+2. Check the state: `sacct -j <JOBID> --format=JobID,State,ExitCode`
+
+```
+$ sacct -j 16996341 --format=JobID,State,ExitCode
+JobID             State ExitCode 
+------------ ---------- -------- 
+16996341      COMPLETED      0:0 
+16996341.ba+  COMPLETED      0:0 
+16996341.ex+  COMPLETED      0:0 
+```
+
+The job reports `COMPLETED` with `ExitCode 0:0`, even though nothing was analyzed. FastQC prints `Skipping '01_data/DOES_NOT_EXIST.fastq.gz' which didn't exist, or couldn't be read` and exits normally, so SLURM has no way to know something went wrong.
+
+3. Look at the log: `cat logs/fastqc_broken_*.err` (or `.out`) to see the message.
+
+**Lesson**: `COMPLETED` means the script exited with code 0, not that the analysis worked. Always check the logs and the expected output files too.
+
+Now make a job that SLURM *can* detect as failed. Replace the last line with a command that returns an error code:
+
+```bash
+ls 01_data/DOES_NOT_EXIST.fastq.gz
+```
+
+4. Submit it and check the state: `sacct -j <JOBID> --format=JobID,State,ExitCode` → `FAILED`, `ExitCode 2:0`
+
+```
+$ sacct -j 16999903 --format=JobID,State,ExitCode
+JobID             State ExitCode 
+------------ ---------- -------- 
+16999903         FAILED      2:0 
+16999903.ba+     FAILED      2:0 
+16999903.ex+  COMPLETED      0:0 
+```
+
+5. Find the error: `cat logs/fastqc_broken_*.err` → `No such file or directory`
+6. Fix the path and resubmit — verify it goes to `COMPLETED`.
 
 This is the loop you will use for every real job failure: `sacct` for *what* happened, `.err` for *why*.
 
@@ -685,60 +740,9 @@ Common reasons:
 | :--- | :--- |
 | `(Priority)` | Other users' jobs outrank yours — just wait |
 | `(Resources)` | Your job is next in line but nodes aren't free yet |
-| `(QOSMaxJobsPerUser)` | You've hit the max concurrent jobs allowed |
 | `(ReqNodeNotAvail)` | You asked for something unavailable (e.g., too much memory for any node) |
 
-To ask SLURM for an estimated start time:
-
-```bash
-squeue -j <JOBID> --start
-```
-
-If a job sits pending with `(ReqNodeNotAvail)`, cancel it and reduce your request — it will never run as submitted.
-
-### Try it: cancel a job
-
-1. Submit a job with an absurdly long time: copy `04_fastqc.slurm`, set `--time=4:00:00`, submit it.
-2. Check `squeue -u $USER` — note the Job ID.
-3. Cancel it: `scancel <JOBID>`
-4. Confirm it is gone: `squeue -u $USER` (empty), and `sacct -j <JOBID>` shows `CANCELLED`.
-
-`scancel` also works on a single array task (`scancel 8250375_3`) or a whole array (`scancel 8250375`).
-
 ---
-
-## Fair share: why your jobs wait
-
-Clusters use a **fair-share** scheduler: the more CPU-hours you've used recently, the lower your priority relative to others. Check your standing with:
-
-```bash
-sshare -u $USER
-```
-
-This is another reason right-sizing matters — resources you reserve count against your usage whether you use them or not, and over-requesting makes your next job wait longer.
-
----
-
-## Useful `SLURM_*` environment variables
-
-Inside a running job, SLURM sets variables your script can read instead of hardcoding values:
-
-| Variable                    | What it holds                    |
-| :-------------------------- | :------------------------------- |
-| `$SLURM_JOB_ID`             | This job's ID                    |
-| `$SLURM_CPUS_PER_TASK`      | Value of `--cpus-per-task`       |
-| `$SLURM_ARRAY_TASK_ID`      | Index of this array task         |
-| `$SLURM_ARRAY_TASK_COUNT`   | Total number of array tasks      |
-| `$SLURM_SUBMIT_DIR`         | Directory you ran `sbatch` from  |
-
-Use them to keep the script and `#SBATCH` directives in sync — e.g., pass the CPUs you requested to a program's thread option:
-
-```bash
-fastqc -t "$SLURM_CPUS_PER_TASK" 01_data/bio_sample_01_R1.fastq.gz -o 02_fastqc/
-```
-
-Now changing `--cpus-per-task` automatically changes `-t`, so the two cannot get out of sync.
-
 
 ## Part 3: SLURM Job Arrays
 
@@ -778,13 +782,11 @@ Create `00_scripts/05_fastqc_array.slurm`:
 #SBATCH --error=slurm_logs/%x_%A_%a.err
 #SBATCH --array=0-9
 
-set -euo pipefail
-
 # Always start in the submission directory for predictable paths
 cd "$SLURM_SUBMIT_DIR"
 
 # Output directory 
-OUTPUT_DIR=06_fastqc_slurm_array
+OUTPUT_DIR=05_fastqc_slurm_array
 APP_LOGS=app_logs
 
 mkdir -p $APP_LOGS $OUTPUT_DIR
@@ -812,12 +814,10 @@ fastqc "$TARGET" -o $OUTPUT_DIR/ \
 
 Tips:
 - If your files can be very large, increase `--time` and `--mem` per task accordingly.
-- Match `--cpus-per-task` to any thread option your tool uses (e.g., `fastqc -t "$SLURM_CPUS_PER_TASK"`).
 
-Submit for all files in `01_data/`. The `slurm_logs/` directory must exist before submitting because SLURM opens the log files first:
+Submit for all files in `01_data/`. 
 
 ```bash
-mkdir -p slurm_logs
 sbatch 00_scripts/05_fastqc_array.slurm
 ```
 
@@ -951,26 +951,19 @@ When you have hundreds of tasks, you usually don't want them all running at once
 sbatch --array=0-9%3 00_scripts/05_fastqc_array.slurm
 ```
 
+```bash
+squeue -u $USER
+```
+
+```
+             JOBID PARTITION     NAME     USER ST       TIME  NODES NODELIST(REASON)
+  17001093_[3-9%3] interacti fastqc_a satheesh PD       0:00      1 (JobArrayTaskLimit)
+        17001093_0 interacti fastqc_a satheesh  R       0:08      1 nova19-biocrunch-10
+        17001093_1 interacti fastqc_a satheesh  R       0:08      1 nova19-biocrunch-10
+        17001093_2 interacti fastqc_a satheesh  R       0:08      1 nova19-biocrunch-10
+```
+
 Only 3 tasks run; the rest stay `PENDING` until a slot frees. Try it: submit `--array=0-9%3` and watch `squeue` — you'll see 3 running, 7 pending.
-
-### A more robust input list: the manifest file
-
-`FILES=(01_data/*.fastq.gz)` works here, but it has a subtlety worth knowing: the array index→file mapping depends on glob order. If files are added/removed between the first run and a retry of failed indices, the indices point at different files. For real projects, write a **manifest** — an explicit list — so index N always means the same file:
-
-```bash
-# Create the manifest once, at submit time
-ls 01_data/*.fastq.gz > filelist.txt
-N=$(wc -l < filelist.txt)
-sbatch --array=1-$N 00_scripts/05_fastqc_array.slurm
-```
-
-And in the script, pick the file by line number instead of a bash array:
-
-```bash
-TARGET=$(sed -n "${SLURM_ARRAY_TASK_ID}p" filelist.txt)
-```
-
-(Note the array starts at 1 here because `sed` line numbers are 1-based.) The manifest is also a record of *exactly* which inputs a run used — worth keeping.
 
 ### Handling Failures: The "Swiss Cheese" Array
 
@@ -990,119 +983,6 @@ Slurm allows comma-separated lists and ranges!
 
 ---
 
-## Chaining jobs with `--dependency`
-
-Real pipelines have ordered steps: align → sort → count, or FastQC → MultiQC. Instead of watching `squeue` and submitting the next step by hand, tell SLURM the order:
-
-```bash
-JOB1=$(sbatch --parsable 00_scripts/05_fastqc_array.slurm)
-sbatch --dependency=afterok:$JOB1 00_scripts/06_multiqc.slurm
-```
-
-- `sbatch --parsable` prints just the job ID, so you can capture it in a variable.
-- `--dependency=afterok:$JOB1` means "start only after JOB1 finishes *successfully*". For an array, this waits for **all** tasks to complete.
-
-Common dependency types:
-
-| Type | Job 2 starts when... |
-| :--- | :--- |
-| `afterok` | Job 1 completed with exit code 0 |
-| `afterany` | Job 1 finished, success or failure |
-| `afternotok` | Job 1 failed (useful for cleanup/alert jobs) |
-| `after` | Job 1 started running |
-
-You can also edit a dependency after submission: `scontrol update job=<JOBID> dependency=afterok:<JOB1>`.
-
-Example follow-up script (`00_scripts/06_multiqc.slurm`) that aggregates the FastQC results:
-
-```bash
-#!/usr/bin/env bash
-
-#SBATCH --job-name=multiqc
-#SBATCH --account=short_term
-#SBATCH --partition=interactive
-#SBATCH --time=00:05:00
-#SBATCH --cpus-per-task=2
-#SBATCH --mem=2G
-#SBATCH --output=logs/%x_%j.out
-#SBATCH --error=logs/%x_%j.err
-
-set -euo pipefail
-cd "$SLURM_SUBMIT_DIR"
-
-module purge
-module load multiqc
-
-multiqc 06_fastqc_slurm_array/ -o 07_multiqc/
-```
-
-Submit the pair and watch the second sit `PENDING` with reason `(Dependency)` until the array finishes.
-
----
-
-## Part 4: Strategy & Wrap-up
-
-How do you choose between the different methods? Use this simple rule of thumb based on **Task Duration** and **Quantity**.
-
-### The Decision Matrix
-
-| Task Duration | Number of Tasks | Best Strategy |
-| :--- | :--- | :--- |
-| < 1 minute | Few (total < ~1 hour) | Bash loop in a single job |
-| < 1 minute | Many | **Task grouping** (bundle many tasks per array element) |
-| 1-15 minutes | < 50 | Bash loop in a single job, or a **job array** |
-| 1-15 minutes | 50+ | **Job array** with `%` throttle, or task grouping |
-| 15 min - 4 hours | < 500 | **Job array** |
-| 15 min - 4 hours | 500+ | **Job array** with `%` throttle |
-| 4+ hours | Any | **Job array** (consider checkpointing) |
-
-### Real-World Scenarios
-
-#### Scenario 1: Image Thumbnails
-> 200 images, each takes 3 seconds to resize.
-
-**Best choice**: **Bash loop in a single job**
-- The whole run takes about 10 minutes, and tasks are too short for an array (scheduler overhead would dominate).
-
-#### Scenario 2: RNA-seq Alignment
-> 48 samples, each takes 2 hours, uses 8 CPUs and 32GB RAM.
-
-**Best choice**: **Job array**
-- Long-running tasks benefit from independent logging.
-- Each sample may have different failure modes, and it is easy to re-run failed samples.
-
-#### Scenario 3: Parameter Sweep
-> 10,000 simulations, each takes 30 seconds.
-
-**Best choice**: **Task grouping**
-- 10,000 array tasks would overwhelm the scheduler.
-- Bundle 100 simulations per array task (100 array elements) using bash logic to split them:
-
-```bash
-# --array=1-100
-START=$(( (SLURM_ARRAY_TASK_ID - 1) * 100 + 1 ))
-END=$(( START + 99 ))
-
-for i in $(seq $START $END)
-do
-  ./run_simulation.sh $i
-done
-```
-
----
-
-### Exercise: run it end-to-end
-
-Put the pieces together:
-
-1. Build a manifest of the input files (`filelist.txt`) and submit the array throttled to 4 concurrent tasks.
-2. While it runs, use `squeue -u $USER` to identify which tasks are running vs. pending (and why).
-3. When it finishes, run `sacct` on the master job ID and find the task with the highest `MaxRSS`.
-4. Pick one task index, check its `seff`, and write down what `--mem` *should* be for a rerun (observed max + ~25%).
-5. Delete one output file, then resubmit *only* that index.
-6. Chain a MultiQC job with `--dependency=afterok` that runs once the array completes.
-7. Bonus: cancel a test job mid-run and confirm `sacct` reports `CANCELLED`.
-
 ### SLURM Quick Reference Cheat Sheet
 
 | Command | Action |
@@ -1112,19 +992,8 @@ Put the pieces together:
 | `squeue -j <JOBID> --start` | Estimate when a pending job will start |
 | `scancel <JOBID>` | Cancel a specific job (or array task `JOBID_INDEX`) |
 | `sbatch script.sh` | Submit a batch job script |
-| `sbatch --parsable` | Submit and print only the job ID (for scripting) |
-| `sbatch --dependency=afterok:<JOBID>` | Submit a job that waits for another to succeed |
 | `sbatch --array=0-99%10` | Array of 100 tasks, max 10 concurrent |
 | `scontrol show job <JOBID>` | Detailed info about a queued or running job |
 | `srun ... --pty bash` | Start an interactive terminal session on a compute node |
 | `seff <JOBID>` | View CPU and Memory efficiency of a completed job |
 | `sacct -j <JOBID>` | View detailed accounting history of a job (or array) |
-| `sshare -u $USER` | Check your fair-share priority standing |
-
-**Key Script Directives**
-- `#SBATCH --time=HH:MM:SS` (Max runtime)
-- `#SBATCH --mem=8G` (Max memory per node)
-- `#SBATCH --cpus-per-task=4` (Number of cores)
-- `#SBATCH --array=0-9` (Job array indices)
-- `%A` and `%a` (Placeholders for Master Job ID and Array Index in `#SBATCH --output`)
-
