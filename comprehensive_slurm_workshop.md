@@ -1,7 +1,5 @@
 # Comprehensive Guide: From Bash Scripts to SLURM Arrays
 
-**Workshop Duration Estimate: ~4 Hours**
-
 ---
 
 ## Quick start
