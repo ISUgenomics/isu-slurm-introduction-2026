@@ -41,7 +41,7 @@
 
 ## Layout
 
-- `comprehensive_slurm_workshop.md` — step-by-step workshop guide
+- `slurm_workshop.md` — step-by-step workshop guide
 - `00_scripts/` — reference scripts used in the workshop
 - `assets/` — screenshots used in the guide
 
@@ -55,7 +55,7 @@
 
 ## Workshop guide
 
-[From Bash Scripts to SLURM Arrays](comprehensive_slurm_workshop.md)
+[From Bash Scripts to SLURM Arrays](slurm_workshop.md)
 
 1. Quick start
 2. Part 1: Running commands and making a script of the commands run
