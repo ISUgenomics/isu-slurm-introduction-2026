@@ -1,6 +1,6 @@
 # Introduction to SLURM
 
-**Instructors:** Viswanathan <u>Satheesh</u>, Rick <u>Masonbrink</u>
+**Instructors:** Viswanathan Satheesh, Rick Masonbrink, Sharu Paul Sharma
 
 **Affiliation:** Bioinformatics Facility, Iowa State University
 
